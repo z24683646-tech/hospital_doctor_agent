@@ -1,3 +1,7 @@
+---
+license: mit
+---
+
 # Hospital Agent Baseline Example
 
 这是一个虚拟诊疗比赛的医生 Agent 示例项目，展示如何基于 `hospital-agent-sdk` 开发、训练、测试和部署自己的医生 Agent。
