@@ -1,0 +1,20 @@
+# Baseline agent configuration.
+#
+# Runtime endpoint and credential values are read from environment variables:
+# SERVICE_BASE_URL, SERVICE_TRAIN_TOKEN, MODEL_API_KEY, TEAM_ID.
+# Do not put tokens or model keys in this file.
+
+output_dir: outputs
+
+training:
+  # If patient_ids is set, only those patients are used. Otherwise the service
+  # returns patient_count randomly selected patients using random_seed.
+  patient_count: 5
+  random_seed: 42
+  patient_ids: []
+
+memory:
+  md_path: data/memory_data/memory.md
+  # 只读取最近几条训练评估反思，避免 prompt 过长。
+  max_notes: 3
+  max_note_chars: 1200
