@@ -247,10 +247,10 @@ pip install -r requirements.txt
 配置本地训练环境变量：
 
 ```bash
-export SERVICE_BASE_URL=https://baconroot-hospital-service.ms.show # 不能修改！！ 比赛后端服务地址，用于训练和测试中获取患者回复、检查结果、提交评估等
-export SERVICE_TRAIN_TOKEN=<your-train-service-token> # 训练阶段访问令牌，即登录时的密钥，用于访问本队伍训练数据和评测接口。
+export SERVICE_BASE_URL=https://baconroot-hospital-service.ms.show # 不能修改！! 比赛后端服务地址，Agent 训练和测试时通过它获取患者回复、检查结果并提交评估。
+export SERVICE_TRAIN_TOKEN=<your-train-service-token> # 训练阶段访问该后端服务的令牌，填写登录该平台时使用的密码。
 export MODEL_API_KEY=<your-model-api-key> # 大语言模型调用密钥，用于训练阶段调用模型服务。
-export TEAM_ID=<your-team-id> # 队伍标识，用于记录训练结果和提交记录归属。
+export TEAM_ID=<your-team-id> # 登录该平台的账号，用于标识队伍并归属训练结果和提交记录。
 ```
 
 运行本地训练：
