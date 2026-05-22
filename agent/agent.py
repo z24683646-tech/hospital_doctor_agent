@@ -360,6 +360,8 @@ class MyDoctorAgent(BasicAgent):
         user_prompt: str,
         response: str,
     ) -> None:
+        if not bool(self.config.get("log_llm_prompts", False)):
+            return
         if self.logger is None:
             return
         output_dir = getattr(self.logger, "output_dir", None)

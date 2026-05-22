@@ -6,10 +6,17 @@
 
 output_dir: outputs
 
-training:
-  # If patient_ids is set, only those patients are used. Otherwise the service
-  # returns patient_count randomly selected patients using random_seed.
+train:
+  # selection supports random, forward, and reverse.
+  selection: random
   patient_count: 5
+  random_seed: 42
+  patient_ids: []
+
+test:
+  # Used by local /test calls.
+  selection: random
+  patient_count: 2
   random_seed: 42
   patient_ids: []
 
@@ -18,3 +25,5 @@ memory:
   # 只读取最近几条训练评估反思，避免 prompt 过长。
   max_notes: 3
   max_note_chars: 1200
+
+log_llm_prompts: false

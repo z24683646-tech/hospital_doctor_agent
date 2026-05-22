@@ -20,7 +20,7 @@ baseline_example/
 │       └── examinations_catalog.json
 ├── config.yaml           # 可配置：训练患者数量、输出目录、memory 路径等
 ├── train.py              # 可选修改：本地训练入口，默认可直接使用
-├── test.py               # 可选修改：本地测试入口或自定义测试脚本
+├── test.py               # 可选修改：本地测试和批量评估示例，默认可直接使用
 ├── requirements.txt      # 必须维护：新增第三方库需要写在这里
 ├── Dockerfile            # 一般不需要修改：部署入口，默认启动 python3 -m agent.agent
 └── README.md
@@ -35,7 +35,7 @@ baseline_example/
 - 部署环境不能依赖 `docker-compose` 拉起额外服务，因此不要把数据库、向量库等作为同一个提交中的 compose 依赖。
 - `data/ref_data/` 是标准科室、疾病和检查名称，不要修改；提交结果中的诊断和检查名称必须使用这里提供的标准名称。
 - `Dockerfile` 一般不需要修改，以免影响平台部署和评测，默认已经包含部署入口和启动命令。
-- `train.py` 和 `test.py` 分别是训练和测试入口，可以按需修改；一般建议先直接使用默认入口，只有在需要自定义训练或测试流程时再调整。
+- `train.py` 是本地训练入口，可以按需修改；`test.py` 展示了启动 Agent 服务、调用 `/test`、批量评估结果的完整本地测试流程。
 
 ## 如何开发医生 Agent
 
@@ -45,8 +45,47 @@ baseline_example/
 - `order_examination`：申请检查。
 - `prescribe_treatment`：提交诊断和治疗方案。
 - `evaluation`：训练阶段获取单个病例的评测结果。
+- `batch_evaluation`：批量评估 `final_results.jsonl` 中的病例结果。
 
 如果要调整模型输入，可以修改 `agent/prompt.py`；如果要保存训练经验、病例总结或向量检索结果，可以修改或替换 `agent/memory.py`。
+
+## 配置说明
+
+配置分为环境变量和 `config.yaml` 两部分。密钥、令牌、服务地址和队伍账号通过环境变量配置，不要写入 `config.yaml`；本地训练、本地测试、输出目录和记忆策略可通过 `config.yaml` 配置。
+
+### 环境变量
+
+- `SERVICE_BASE_URL`：比赛后端服务地址，Agent 训练和测试时通过它获取患者回复、检查结果并提交评估。
+- `SERVICE_TRAIN_TOKEN`：训练阶段访问比赛后端服务的令牌，填写登录该平台时使用的密码。
+- `MODEL_API_KEY`：大语言模型调用密钥，用于本地训练和本地测试时调用医生 Agent 自己的大模型。
+- `TEAM_ID`：登录该平台的账号，用于标识队伍并归属训练结果和提交记录。
+
+### `config.yaml`
+
+#### `output_dir`
+
+- `output_dir`：训练和测试运行产物的输出目录。默认是 `outputs`，SDK 会在其中生成 `train/`、`test/`、事件日志和最终结果。
+
+#### `train`
+
+- `train.selection`：本地训练患者选取方式，支持 `random`、`forward`、`reverse`。`random` 按随机种子抽样，`forward` 按服务返回顺序从前往后取，`reverse` 按服务返回顺序从后往前取。
+- `train.patient_count`：本地训练使用的患者数量；为空时使用服务返回的全部患者。
+- `train.random_seed`：`train.selection: random` 时使用的随机种子。
+- `train.patient_ids`：指定训练患者 ID 列表；非空时优先使用该列表，忽略 `selection`、`patient_count` 和 `random_seed`。
+
+#### `test`
+
+- `test.selection`：本地 `/test` 调用的患者选取方式，支持 `random`、`forward`、`reverse`。含义与 `train.selection` 相同。
+- `test.patient_count`：本地 `/test` 调用使用的患者数量；建议保持较小，便于快速验证。
+- `test.random_seed`：`test.selection: random` 时使用的随机种子。
+- `test.patient_ids`：指定本地测试患者 ID 列表；非空时优先使用该列表，忽略 `selection`、`patient_count` 和 `random_seed`。
+
+#### 自定义配置
+
+`config.yaml` 也可以添加自定义配置，医生 Agent 代码可以通过 `self.config` 读取。例如：
+
+- `memory`：baseline 示例使用 Markdown 文件作为记忆存储，并在 `agent/memory.py` 中读取 `memory.md_path`、`memory.max_notes`、`memory.max_note_chars`；如果你选择数据库、向量库、对象存储或其他记忆方案，可以根据自己的 `memory.py` 逻辑改造这一段配置。
+- `log_llm_prompts`：是否记录每次大模型调用的 prompt 和响应。默认关闭；设为 `true` 后会在每次运行目录下生成 `llm_prompts/`，用于调试模型输入输出。
 
 ## 医生可用 Actions
 
@@ -177,7 +216,7 @@ final_result = await self.actions.prescribe_treatment(
 
 ### `evaluation`
 
-训练阶段用于评估单个已完成病例，通常在 `prescribe_treatment` 之后调用，用于反思和改进策略。测试阶段的临时 token 不能成功调用该 action，部署测试逻辑中不要依赖它。
+训练阶段用于评估单个已完成病例，通常在 `prescribe_treatment` 之后调用，用于反思和改进策略。测试阶段不要依赖该 action。
 
 输入：
 
@@ -199,10 +238,9 @@ report = await self.actions.evaluation(
 {
   "patientId": "patient_xxx",
   "status": "evaluated",
-  "overallScore": 0.85,
   "diagnosisAccuracy": 1.0,
   "examinationPrecision": 0.8,
-  "treatmentMatchingScore": 0.75,
+  "treatmentOverallScore": 0.75,
   "treatmentSafety": 1.0,
   "treatmentEffectivenessAlignment": 0.8,
   "treatmentPersonalization": 0.7,
@@ -235,6 +273,53 @@ report = await self.actions.evaluation(
 
 评测报告字段可能随比赛服务调整而变化，训练代码应优先读取自己需要的字段，并对缺失字段做好兜底。
 
+### `batch_evaluation`
+
+批量评估一个 `final_results.jsonl` 文件，或包含该文件的输出目录。适合本地 `/test` 运行结束后，对整批测试病例做统一评估。
+传入目录时，SDK 会自动读取该目录下的 `final_results.jsonl`；传入文件路径时，SDK 会直接读取该 JSONL 文件。
+
+输入：
+
+```python
+report = await self.actions.batch_evaluation("outputs/test/test_xxx")
+```
+
+也可以传入具体文件：
+
+```python
+report = await self.actions.batch_evaluation("outputs/test/test_xxx/final_results.jsonl")
+```
+
+输出：
+
+```json
+{
+  "diagnosis_accuracy": 0.8,
+  "examination_precision": 0.7,
+  "treatment_overall_score": 0.75,
+  "treatment_safety": 0.9,
+  "treatment_effectiveness_alignment": 0.7,
+  "treatment_personalization": 0.65,
+  "counts": {
+    "final_results": 2,
+    "evaluated_patients": 2
+  },
+  "treatment_details": [
+    {
+      "patient_id": "Patient_00001",
+      "overall_score": 0.75,
+      "safety": 0.9,
+      "effectiveness_alignment": 0.7,
+      "personalization": 0.65,
+      "reasoning": "评测模型给出的解释"
+    }
+  ],
+  "submitted_at": "2026-05-22T10:00:00+08:00"
+}
+```
+
+其中 `diagnosis_accuracy`、`examination_precision`、`treatment_overall_score` 是三个主要评估分项；`treatment_safety`、`treatment_effectiveness_alignment`、`treatment_personalization` 分别表示治疗方案在安全性、有效性、个性化上的表现；`counts` 统计提交和评估的病例数量；`treatment_details` 是每个病例的治疗方案评估明细。评估报告会同时写入同目录下的 `final_results_eval_report.json`。
+
 ## Quick Start
 
 安装依赖：
@@ -247,10 +332,10 @@ pip install -r requirements.txt
 配置本地训练环境变量：
 
 ```bash
-export SERVICE_BASE_URL=https://baconroot-hospital-service.ms.show # 不能修改！! 比赛后端服务地址，Agent 训练和测试时通过它获取患者回复、检查结果并提交评估。
-export SERVICE_TRAIN_TOKEN=<your-train-service-token> # 训练阶段访问该后端服务的令牌，填写登录该平台时使用的密码。
-export MODEL_API_KEY=<your-model-api-key> # 大语言模型调用密钥，用于训练阶段调用模型服务。
-export TEAM_ID=<your-team-id> # 登录该平台的账号，用于标识队伍并归属训练结果和提交记录。
+export SERVICE_BASE_URL=https://baconroot-hospital-service.ms.show
+export SERVICE_TRAIN_TOKEN=<your-train-service-token>
+export MODEL_API_KEY=<your-model-api-key>
+export TEAM_ID=<your-team-id>
 ```
 
 运行本地训练：
@@ -259,11 +344,7 @@ export TEAM_ID=<your-team-id> # 登录该平台的账号，用于标识队伍并
 python train.py
 ```
 
-训练患者可以在 `config.yaml` 中配置：
-
-- `training.patient_count`：随机抽取的训练患者数量。
-- `training.random_seed`：随机种子。
-- `training.patient_ids`：指定患者 ID；如果填写，则优先使用指定列表。
+训练患者可以在 `config.yaml` 的 `train` 中配置。
 
 ## 启动测试服务
 
@@ -276,19 +357,18 @@ python -m agent.agent
 服务默认监听 `0.0.0.0:7860`，测试接口为 `POST /test`。本地调用示例：
 
 ```bash
-curl -X POST http://127.0.0.1:7860/test \
-  -H 'Content-Type: application/json' \
-  -d '{"contestServiceToken":"<temporary-service-token>"}'
+curl -X POST http://127.0.0.1:7860/test
 ```
 
-测试阶段通常只需要配置：
+本地测试会使用环境变量 `SERVICE_TRAIN_TOKEN` 访问比赛后端，并继续使用本地 `MODEL_API_KEY` 调用医生 Agent 自己的大模型。这里使用的仍然是训练集中的患者数据；测试患者可以在 `config.yaml` 的 `test` 中配置。
+
+也可以直接运行完整测试示例：
 
 ```bash
-export SERVICE_BASE_URL=<contest-service-url>
-export TEAM_ID=<your-team-id>
+python test.py
 ```
 
-测试请求中的临时 token 会由比赛平台传入；部署环境不需要提供 `MODEL_API_KEY`。
+该脚本会自动启动 Agent 服务，调用 `POST /test` 生成 `final_results.jsonl`，再调用 `batch_evaluation` 进行批量评估并输出测试和评估结果。
 
 ## 部署
 
