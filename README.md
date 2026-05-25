@@ -147,15 +147,27 @@ exam_response = await self.actions.order_examination(
 
 ```json
 {
-  "requested_items": ["血常规", "尿常规"],
-  "normalized_items": ["血常规", "尿常规"],
-  "invalid_items": [],
-  "invalid_message": "",
   "results": {
     "血常规": {
-      "item_name": "血常规",
-      "result": "检查结果文本",
-      "status": "completed"
+      "result": {
+        "血红蛋白": "118 g/L［参考值：140-180 g/L］",
+        "血白细胞计数": "13.2 x10^9/L［参考值：4.5-11.0］"
+      },
+      "status": "abnormal",
+      "abnormal_indicators": []
+    },
+    "尿常规": {
+      "result": {
+        "尿蛋白": "阴性",
+        "尿红细胞": "0-3 个细胞/HPF"
+      },
+      "status": "normal",
+      "abnormal_indicators": []
+    },
+    "不存在的检查": {
+      "result": "无效检查",
+      "status": "invalid",
+      "abnormal_indicators": []
     }
   }
 }
@@ -163,11 +175,10 @@ exam_response = await self.actions.order_examination(
 
 字段说明：
 
-- `requested_items`：本次请求的检查名称。
-- `normalized_items`：服务端认可并完成的检查名称。
-- `invalid_items`：无效或非标准检查名称。
-- `invalid_message`：存在无效检查时的提示，通常表示需要使用标准检查名称。
-- `results`：检查结果字典，key 是检查名称；每个结果包含 `item_name`、`result`、`status`。`status` 可能是 `completed` 或 `normal`。
+- `results`：检查结果字典，key 是请求的检查名称。
+- `result`：检查结果。常见形式是“指标名称 -> 指标值”的字典；如果该检查无效，则返回 `"无效检查"`；如果该检查只适用于特殊场景，也可能返回一段补充描述文本。
+- `status`：检查状态。`normal` 表示正常，`abnormal` 表示异常，`invalid` 表示无效。
+- `abnormal_indicators`：异常指标名称列表。
 
 ### `prescribe_treatment`
 
