@@ -208,7 +208,6 @@ final_result = await self.actions.prescribe_treatment(
 {
   "patient_id": "patient_xxx",
   "team_id": "your-team-id",
-  "doctor_id": "your-team-id",
   "diagnosis": ["肺炎"],
   "treatment_plan": "治疗方案文本",
   "reasoning": "诊疗依据文本",
